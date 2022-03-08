@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import plotly.express as px
 import streamlit.components.v1 as components
 from jinja2 import Template
-import _functions as functions
+#import _functions as functions
 from datetime import datetime, timedelta
 import requests
 import json
