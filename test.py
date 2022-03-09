@@ -190,10 +190,9 @@ class Data:
         return temp[temp.index > (datetime.now() - timedelta(days=365*10))]
 
     def get_weighted_value(self, category_weights, date_input=datetime.now(), days=365):
-        total_value = 0
-        for category in category_weights:
-            total_value += growth_diff(getattr(self, clean_string(category)), date_input=date_input, days=days) * (category_weights[category]/ sum([category_weights[i] for i in category_weights]))
-        return total_value
+        temp = self.return_values(category_weights, days=days)
+        temp['weights'] = temp['category'].map(category_weights)
+        return temp['weights'] @ temp['inflation']
 
     def return_values(self, category_weights, date_input=datetime.now(), days=365):
         l = []
@@ -232,7 +231,7 @@ def inflation_comparison(temp, days=365):
     return [(timeframe, growth_diff(temp, date_input=timeframe, days=365)) for timeframe in temp.index]
 
 def price_comparison(temp, days=365):
-    return [(timeframe, temp['adjusted_value'][timeframe]) for timeframe in temp.index]
+    return temp.groupby(temp.index)['adjusted_value'].mean()
 
 def _build_metric(label, value, percentile):
     #print('percentile', percentile)
@@ -316,6 +315,8 @@ def show_map():
 #area_names = ['Pacific','East South Central','West South Central','Mountain','Phoenix-Mesa-Scottsdale, AZ','San Francisco-Oakland-Hayward, CA','Los Angeles-Long Beach-Anaheim, CA','Riverside-San Bernardino-Ontario, CA','San Diego-Carlsbad, CA','Denver-Aurora-Lakewood, CO','New England','Washington-Arlington-Alexandria, DC-VA-MD-WV','Philadelphia-Camden-Wilmington, PA-NJ-DE-MD','Middle Atlantic','South Atlantic','Miami-Fort Lauderdale-West Palm Beach, FL','Tampa-St.Petersburg-Clearwater, FL','Atlanta-Sandy Springs-Roswell, GA','West North Central','East North Central','St. Louis, MO-IL','Chicago-Naperville-Elgin, IL-IN-WI','Boston-Cambridge-Newton, MA-NH','Baltimore-Columbia-Towson, MD','Detroit-Warren-Dearborn, MI','Minneapolis-St.Paul-Bloomington, MN-WI','New York-Newark-Jersey City, NY-NJ-PA','Houston-The Woodlands-Sugar Land, TX','Dallas-Fort Worth-Arlington, TX','Seattle-Tacoma-Bellevue WA']
 
 zip_code = st.sidebar.text_input("Enter Zip Code", placeholder='10001')
+if st.sidebar.button('Pick Random Zip Code'):
+    zip_code = st.session_state.zip_code_fips_match['zip_code'].sample().values[0]
 if zip_code:
     if int(zip_code) in st.session_state.zip_code_fips_match.zip_code.unique():
         if 'zip_code' in st.session_state:
@@ -329,9 +330,11 @@ if zip_code:
             st.session_state['local_classification'] = st.session_state.zip_code_fips_match[st.session_state.zip_code_fips_match['zip_code'] == st.session_state['zip_code']]['local_classification'].values[0]
             st.session_state['regional_classification'] = st.session_state.zip_code_fips_match[st.session_state.zip_code_fips_match['zip_code'] == st.session_state['zip_code']]['regional_classification'].values[0]
             #print(st.session_state['local_classification'], st.session_state['regional_classification'])
-            if st.session_state['local_classification'] == st.session_state['local_classification']:
-                pass
+            #if st.session_state['local_classification'] == st.session_state['local_classification']:
+            #    pass
                 #print('Local')
+    else:
+      st.sidebar.write(f'{zip_code} not in database')
 
 if 'temp_df' in st.session_state:
     periods = [
@@ -340,7 +343,7 @@ if 'temp_df' in st.session_state:
     '2 Yrs. Inflation'
     ]
     columns = st.columns(3)
-    st.header('Custom Inflation Calculator')
+    #st.header('Custom Inflation Calculator')
     temp_df_local = None
     temp_df_regional = None
     if 'zip_code' in st.session_state:
@@ -369,7 +372,10 @@ if 'temp_df' in st.session_state:
             val = st.sidebar.slider(category, 0.0, 1.0, value=st.session_state.category_weights.category_weights[category])
             if val:
                 st.session_state.category_weights.update_value(category, val)
-
+    if 'county_name' in st.session_state:
+      st.header(f'{st.session_state.county_name} Inflation Calculator', anchor='custom-inflation-calculator')
+    else:
+      st.header('Inflation Calculator', anchor='custom-inflation-calculator')
     columns = st.columns(3)
     for position, value in enumerate([180, 365, 730]):
         with columns[position]:
@@ -519,6 +525,7 @@ if 'temp_df' in st.session_state:
             color='category',
             barmode='stack'
             )
+        fig.update_layout(xaxis_title=None, yaxis_title='Inflation', legend_title_text=None)
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.write('Select zip code to see local inflation drivers.')
@@ -535,7 +542,9 @@ if 'temp_df' in st.session_state:
         st.session_state['category'] = category
         temp = st.session_state.geo_data[st.session_state.geo_data['category'] == category]
         st.session_state.inflation_fig = px.choropleth(temp, geojson=st.session_state.countries, locations='STCOUNTYFP', color='inflation', scope='usa', hover_data=['classification', 'inflation', 'location'], color_continuous_scale="YlOrRd")
+        st.session_state.inflation_fig.update_layout(coloraxis_colorbar_title='Inflation')
         st.session_state.latest_price_fig = px.choropleth(temp, geojson=st.session_state.countries, locations='STCOUNTYFP', color='latest_price', scope='usa', hover_data=['classification', 'latest_price', 'location'], color_continuous_scale="YlOrRd")
+        st.session_state.latest_price_fig.update_layout(coloraxis_colorbar_title='Latest Price')
     columns = st.columns(2)
     with columns[0]:
         #st.session_state.geo_inflation = pd.read_csv('/Users/evanagovino/Downloads/fips_match_n.csv', dtype={"FIPS": str})
