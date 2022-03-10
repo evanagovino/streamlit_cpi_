@@ -306,9 +306,9 @@ with st.spinner('Retrieving Latest Data From BLS'):
 if 'category_weights' not in st.session_state:
     st.session_state.category_weights = Category_Weights()
 
-def above_mean(col):
-  is_above = col > 0
-  return ['background-color: red' if v else 'background-color: green' for v in is_above]
+# def above_mean(col):
+#   is_above = col > 0
+#   return ['background-color: red' if v else 'background-color: green' for v in is_above]
 
 # def show_map():
 #     pass
@@ -352,18 +352,34 @@ def transform_df_for_comparison(df, local=None, regional=None, value='inflation'
                   values=value)
     df = df.rename(columns={'U.S. city average': 'National'})
     column_order = []
+    if value == 'inflation':
+      total_values = {}
+      total_values['National'] = [st.session_state.national_classification.get_weighted_value(st.session_state.category_weights.baseline_weights)]
     if local:
         df = df.rename(columns={local: 'Local'})
         column_order.append('Local')
         df['Difference'] = df['Local'] - df['National']
+        if value == 'inflation':
+          total_values['Local'] = st.session_state.local_classification.get_weighted_value(st.session_state.category_weights.baseline_weights)
+          total_values['Difference'] = [st.session_state.local_classification.get_weighted_value(st.session_state.category_weights.baseline_weights) - st.session_state.national_classification.get_weighted_value(st.session_state.category_weights.baseline_weights)]
     if regional:
         df = df.rename(columns={regional: 'Regional'})
         column_order.append('Regional')
-        df['Difference'] = df['Regional'] - df['National']
+        if not local:
+            df['Difference'] = df['Regional'] - df['National']
+        if value == 'inflation':
+            total_values['Regional'] = [st.session_state.regional_classification.get_weighted_value(st.session_state.category_weights.baseline_weights)]
+            if not local:
+                total_values['Difference'] = [st.session_state.regional_classification.get_weighted_value(st.session_state.category_weights.baseline_weights) - st.session_state.national_classification.get_weighted_value(st.session_state.category_weights.baseline_weights)]
     column_order.append('National')
     if 'Difference' in df.columns:
         column_order.append('Difference')
-    return df[column_order]
+    df = df[column_order]
+    if value == 'inflation':
+        total_values = pd.DataFrame.from_dict(total_values)
+        total_values.index = ['Total']
+        df = pd.concat([df, total_values])
+    return df
 
 def transform_df_for_bar_graph(classification, category_weights):
     comparison_graph = []
@@ -439,7 +455,7 @@ if 'national_classification' in st.session_state:
             df = transform_df_for_comparison(df_, value='inflation')
         st.subheader('Inflation Comparison by Category')
         if 'Difference' in df.columns:
-            st.dataframe(df.style.format("{:.2%}").bar(align='mid', color=['green', 'red'], subset=['Difference']))
+            st.dataframe(df.style.format("{:.2%}").bar(align='mid', color=['green', 'red'], subset=['Difference']))#.set_properties(subset=df.index[-1], **{'font-weight': 'bold'}))
         else:
             st.dataframe(df.style.format("{:.2%}"))
     with columns[1]:
