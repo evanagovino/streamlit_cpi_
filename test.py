@@ -267,38 +267,39 @@ def _build_metric(label, value, percentile):
     return html.render(label=label, value=value, percentile=percentile)
 
 #Process Data
-if 'df' not in st.session_state:
-    #st.session_state.df = pd.read_csv('df.csv')
-    st.session_state.df = fetch_and_clean_data()
-    st.session_state.national_classification = initiate_instance(st.session_state.df, categories, area_name = 'U.S. city average')
+with st.spinner('Retrieving Latest Data From BLS'):
+    if 'df' not in st.session_state:
+        #st.session_state.df = pd.read_csv('df.csv')
+        st.session_state.df = fetch_and_clean_data()
+        st.session_state.national_classification = initiate_instance(st.session_state.df, categories, area_name = 'U.S. city average')
 
-if 'zip_code_fips_match' not in st.session_state:
-    st.session_state.zip_code_fips_match = pd.read_csv('zip_fips_match.csv')
-    st.session_state.zip_code_fips_match['STCOUNTYFP'] = st.session_state.zip_code_fips_match['STCOUNTYFP'].astype('string')
-    st.session_state.zip_code_fips_match['STCOUNTYFP'] = [i if len(i) == 5 else '0' + i for i in st.session_state.zip_code_fips_match['STCOUNTYFP']]
-    st.session_state.zip_code_fips_match['classification'] = st.session_state.zip_code_fips_match['local_classification'].fillna(st.session_state.zip_code_fips_match['regional_classification'])
-    st.session_state.all_classifications = list(st.session_state.zip_code_fips_match['regional_classification'].unique()) + list(st.session_state.zip_code_fips_match['local_classification'].unique())
-    response = requests.get('https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json')
-    st.session_state.countries = json.loads(response.content)
+    if 'zip_code_fips_match' not in st.session_state:
+        st.session_state.zip_code_fips_match = pd.read_csv('zip_fips_match.csv')
+        st.session_state.zip_code_fips_match['STCOUNTYFP'] = st.session_state.zip_code_fips_match['STCOUNTYFP'].astype('string')
+        st.session_state.zip_code_fips_match['STCOUNTYFP'] = [i if len(i) == 5 else '0' + i for i in st.session_state.zip_code_fips_match['STCOUNTYFP']]
+        st.session_state.zip_code_fips_match['classification'] = st.session_state.zip_code_fips_match['local_classification'].fillna(st.session_state.zip_code_fips_match['regional_classification'])
+        st.session_state.all_classifications = list(st.session_state.zip_code_fips_match['regional_classification'].unique()) + list(st.session_state.zip_code_fips_match['local_classification'].unique())
+        response = requests.get('https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json')
+        st.session_state.countries = json.loads(response.content)
 
-if 'geo_data' not in st.session_state:
-    #category = [categories]
-    temp = st.session_state.zip_code_fips_match.groupby(['STCOUNTYFP', 'classification'])['drop_column'].count().reset_index()
-    l = []
-    for classification in temp['classification'].unique():
-        #print(category, classification)
-        _ = initiate_instance(st.session_state.df, categories, area_name = classification)
-        #_ = _.return_values([category], days=365)
-        temp_df = _.return_values(categories)
-        #inflation = _.return_values(categories)['inflation'].values[0]
-        #latest_price = _.return_values([category])['latest_price'].values[0]
-        _ = temp[temp['classification'] == classification].reset_index(drop=True).merge(temp_df, how='left', left_on='classification', right_on='location')
-        #_['inflation'] = inflation
-        #_['latest_price'] = latest_price
-        #_['FIPS'] = temp[temp['classification'] == classification]['STCOUNTYFP'].values[0]
-        l.append(_)
-    st.session_state.geo_data = pd.concat(l)
-    #print(st.session_state.geo_data.head(), st.session_state.geo_data.dtypes)
+    if 'geo_data' not in st.session_state:
+        #category = [categories]
+        temp = st.session_state.zip_code_fips_match.groupby(['STCOUNTYFP', 'classification'])['drop_column'].count().reset_index()
+        l = []
+        for classification in temp['classification'].unique():
+            #print(category, classification)
+            _ = initiate_instance(st.session_state.df, categories, area_name = classification)
+            #_ = _.return_values([category], days=365)
+            temp_df = _.return_values(categories)
+            #inflation = _.return_values(categories)['inflation'].values[0]
+            #latest_price = _.return_values([category])['latest_price'].values[0]
+            _ = temp[temp['classification'] == classification].reset_index(drop=True).merge(temp_df, how='left', left_on='classification', right_on='location')
+            #_['inflation'] = inflation
+            #_['latest_price'] = latest_price
+            #_['FIPS'] = temp[temp['classification'] == classification]['STCOUNTYFP'].values[0]
+            l.append(_)
+        st.session_state.geo_data = pd.concat(l)
+        #print(st.session_state.geo_data.head(), st.session_state.geo_data.dtypes)
 
 
 
@@ -473,18 +474,20 @@ if 'national_classification' in st.session_state:
     else:
         st.write('Select zip code to see local inflation drivers.')
     #Geo-Anlaysis
-    category = st.selectbox('Pick a category for geo-analysis', categories, on_change=update_category)
-    if category not in st.session_state:
-        st.session_state['category'] = category
-    columns = st.columns(2)
-    with columns[0]:
-        st.subheader('Regional Inflation Comparison')
-        fig = show_map(st.session_state.category, 'inflation')
-        st.plotly_chart(fig, use_container_width=True)
-    with columns[1]:
-        st.subheader('Regional Price Comparison')
-        fig = show_map(st.session_state.category, 'latest_price')
-        st.plotly_chart(fig, use_container_width=True)
+    checkbox = st.checkbox('Show Geo-Analysis')
+    if checkbox:
+      category = st.selectbox('Pick a category for geo-analysis', categories, on_change=update_category)
+      if category not in st.session_state:
+          st.session_state['category'] = category
+      columns = st.columns(2)
+      with columns[0]:
+          st.subheader('Regional Inflation Comparison')
+          fig = show_map(st.session_state.category, 'inflation')
+          st.plotly_chart(fig, use_container_width=True)
+      with columns[1]:
+          st.subheader('Regional Price Comparison')
+          fig = show_map(st.session_state.category, 'latest_price')
+          st.plotly_chart(fig, use_container_width=True)
 st.subheader('Methodology')
 
 markdown_text = """
